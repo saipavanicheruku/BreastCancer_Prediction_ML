@@ -1,0 +1,216 @@
+---
+title: "**Breast Cancer Prediction Using Machine Learning**"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## The Data Set
+
+```{r}
+cancer = read.csv("DataSet/breastcancer.csv")
+```
+
+
+
+## Loading the libraries and setting the random number generator seed to 23
+
+```{r warning=FALSE, message=FALSE}
+library(class)
+library(tidyverse)
+library(caTools)
+library(rpart)
+set.seed(23)
+```
+
+
+
+## Cleaning and preparing the data
+
+```{r}
+names(cancer) = c("Sample_ID",
+                  "Clump_Thickness",
+                  "Uniformity_of_Cell_Size",
+                  "Uniformity_of_Cell_Shape",
+                  "Marginal_Adhesion",
+                  "Single_Epithelial_Cell_Size",
+                  "Bare_Nuclei",
+                  "Bland_Chromatin",
+                  "Normal_Nucleoli",
+                  "Mitoses",
+                  "Class")
+cancer = na.omit(cancer)
+cancer$Class = factor(cancer$Class,
+                      levels=c(2,4),
+                      labels=c("Benign","Malignant"))
+```
+
+Adding meaningful column names, eliminating all NA values from the dataset and factoring the Class column values as Benign(2) and Malignant(4)
+
+
+
+## Question 1 - Create a scatter plot of Clump_Thickness vs. Uniformity_of_Cell_Size, color coded by the benign or malignant nature of the cell
+
+```{r}
+ggplot(cancer) +
+  geom_point(aes(x = Clump_Thickness, y = Uniformity_of_Cell_Size, color = Class))
+```
+
+
+
+## Question 2 - Create functions that, given a confusion matrix, calculate sensitivity, specificity, accuracy and precision.
+
+```{r}
+sensitivity = function(cm) 
+{
+  return(cm[1,1]/(cm[1,1]+cm[1,2]))
+}
+specificity = function(cm)
+{
+  return(cm[2,2]/(cm[2,1]+cm[2,2]))
+}
+accuracy = function(cm) 
+{
+  return((cm[1,1]+cm[2,2])/(cm[1,1]+cm[1,2]+cm[2,1]+cm[2,2]))
+}
+precision = function(cm)
+{
+  return(cm[1,1]/(cm[1,1]+cm[2,1]))
+}
+```
+
+Functions created using the confusion matrix and its values TP, FP, TN, FN
+
+
+
+## Question 3: Separate Training and Test Data Sets
+
+```{r}
+ind = sample(2, nrow(cancer), replace=TRUE, prob=c(0.67, 0.33))
+```
+
+Created training data set from the original cancer data set to correspond to 67% of the original available data.
+
+
+
+## #Question 4: Applying KNN
+
+```{r}
+cancer.training = cancer[ind==1, 2:6]
+cancer.test = cancer[ind==2, 2:6]
+cancer.trainLabels = cancer[ind==1, 11]
+cancer.testLabels = cancer[ind==2, 11]
+
+prediction = knn(train = cancer.training,
+                 test = cancer.test,
+                 cl = cancer.trainLabels,
+                 k=3)
+
+(confusionMatrix = table(Actual_Value = cancer.testLabels,
+                         Predicted_Value = prediction))
+
+sensitivity(confusionMatrix)
+specificity(confusionMatrix)
+accuracy(confusionMatrix)
+precision(confusionMatrix)
+```
+
+For KNN model the measures are:
+
+Measure     | Percentage
+
+Sensitivity | `r format(100*(sensitivity(confusionMatrix)),digits = 4)`%
+
+Specificity | `r format(100*(specificity(confusionMatrix)),digits = 4)`%
+
+Accuracy    | `r format(100*(accuracy(confusionMatrix)),digits = 4)`%
+
+Precision    | `r format(100*(precision(confusionMatrix)),digits = 4)`%
+
+
+## Question 5: Logistic Regression
+
+```{r}
+(logisticModel = glm(cancer.trainLabels ~ Clump_Thickness +
+                       Uniformity_of_Cell_Size +
+                       Uniformity_of_Cell_Shape +
+                       Marginal_Adhesion +
+                       Single_Epithelial_Cell_Size,
+                     data=cancer.training,
+                     family='binomial'))
+
+prediction = predict(logisticModel, cancer.test, type='response')
+cancer.test$predicted = ifelse(prediction>0.7, TRUE, FALSE)
+
+(confusionMatrix = table(Actual_Value = cancer.testLabels,
+                         Predicted_Value = prediction>0.7))
+
+sensitivity(confusionMatrix)
+specificity(confusionMatrix)
+accuracy(confusionMatrix)
+precision(confusionMatrix)
+```
+
+For Logistic Regression model the measures are:
+
+Measure     | Percentage
+
+Sensitivity | `r format(100*(sensitivity(confusionMatrix)),digits = 4)`%
+
+Specificity | `r format(100*(specificity(confusionMatrix)),digits = 4)`%
+
+Accuracy    | `r format(100*(accuracy(confusionMatrix)),digits = 4)`%
+
+Precision    | `r format(100*(precision(confusionMatrix)),digits = 4)`%
+
+
+## Question 6: Decision Tree
+
+```{r}
+model = rpart(cancer.trainLabels ~
+                Clump_Thickness +
+                Uniformity_of_Cell_Size +
+                Uniformity_of_Cell_Shape +
+                Marginal_Adhesion +
+                Single_Epithelial_Cell_Size,
+              data=cancer.training,
+              control=rpart.control(maxdepth=3),
+              method='class')
+
+prediction = predict(model, cancer.test, type='class')
+
+(confusionMatrix = table(Actual_Value = cancer.testLabels,
+                         Predicted_Value = prediction))
+
+sensitivity(confusionMatrix)
+specificity(confusionMatrix)
+accuracy(confusionMatrix)
+precision(confusionMatrix)
+```
+
+For Logistic Regression model the measures are:
+
+Measure     | Percentage
+
+Sensitivity | `r format(100*(sensitivity(confusionMatrix)),digits = 4)`%
+
+Specificity | `r format(100*(specificity(confusionMatrix)),digits = 4)`%
+
+Accuracy    | `r format(100*(accuracy(confusionMatrix)),digits = 4)`%
+
+Precision    | `r format(100*(precision(confusionMatrix)),digits = 4)`%
+
+
+## Question 7 - Is there one method that us best than the others, and why?
+
+Decision tree algorithm works better compared to the other two models.
+
+We can make this inference by looking at the specificity values from the three models.
+
+Getting higher TypeI Errors (false positive) i.e, 'Cancerous/Malignant' predicted as 'Healthy/Beningn' is dangerous pertaining to this data set.
+
+So, we must look at the specificity values to determine which model predictions are suitable.
+
+Decision tree algorithm has specificity value of 91.6% which is the highest among the three models and thus, makes a better choice compared to others.
